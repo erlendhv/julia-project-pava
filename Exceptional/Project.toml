@@ -1,0 +1,16 @@
+name = "Exceptional"
+uuid = "b97f6489-467f-4f61-a527-25de77a28f85"
+authors = ["Erlend Veire <erlend.veire@gmail.com>"]
+version = "0.1.0"
+
+[deps]
+JuliaFormatter = "98e50ef6-434e-11e9-1051-2b60c6c9e899"
+LanguageServer = "2b0e0bc5-e4fd-59b4-8912-456d1b03d8d7"
+PackageCompiler = "9b87118b-4619-50d2-8e1e-99f35a4d4d9d"
+StaticLint = "b3cc710f-9c33-5bdb-a03d-a94903873e97"
+
+[compat]
+JuliaFormatter = "1.0.62"
+LanguageServer = "4.5.1"
+PackageCompiler = "2.2.0"
+StaticLint = "8.2.2"
