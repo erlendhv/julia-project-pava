@@ -1,15 +1,15 @@
 # Global registry to track available restarts at different execution points
-const restart_registry = Dict{Symbol, Vector{Tuple{Symbol, Function}}}()
+const restart_registry = Dict{Symbol,Vector{Tuple{Symbol,Function}}}()
 
 #Establishes a named exit point that can be used for non-local transfers of control.
 #The provided function `func` will be called with an escape function as its argument.
 function to_escape(func)
     # Create a unique context identifier for this escape point
     context_id = gensym("escape_context")
-    
+
     # Define the escape function
-    escape_func = (value=nothing) -> throw(EscapeException(context_id, value))
-    
+    escape_func = (value = nothing) -> throw(EscapeException(context_id, value))
+
     try
         # Call the function with the escape function as argument
         return func(escape_func)
@@ -36,7 +36,8 @@ function handling(func, handlers...)
         for (exception_type, handler) in handlers
             if e isa exception_type
                 # Call the handler with the exception
-                return handler(e)
+                handler(e)  # Call the handler
+                rethrow(e)  # Re-throw to allow outer handlers to catch it
             end
         end
         # If no handler matches, re-throw the exception
@@ -49,10 +50,10 @@ end
 function with_restart(func, restarts...)
     # Create a unique identifier for this restart context
     context_id = gensym("restart_context")
-    
+
     # Register the restarts
     restart_registry[context_id] = [(name, restart_func) for (name, restart_func) in restarts]
-    
+
     try
         # Execute the function in the context of the restarts
         return func()
@@ -113,7 +114,7 @@ end
 
 # Signals an exceptional situation that must be handled.
 # If no handler takes action, the program aborts with an error.
-function error(exception)
+function Base.error(exception)
     throw(exception)
 end
 
@@ -142,11 +143,17 @@ struct DivisionByZero <: Exception end
 
 # Test the reciprocal function
 function reciprocal(x)
-    x == 0 ? error(DivisionByZero()) : 1/x
+    x == 0 ? error(DivisionByZero()) : 1 / x
 end
+
+
+# ==================================================================================================
+# ==================================================================================================
+
 
 # Basic function test
 reciprocal(10)  # Should return 0.1
+
 try
     reciprocal(0)  # Should throw DivisionByZero
 catch e
@@ -154,21 +161,21 @@ catch e
 end
 
 # Test handling with a simple handler
-handling(DivisionByZero => (c)->println("I saw a division by zero")) do
+handling(DivisionByZero => (c) -> println("I saw a division by zero")) do
     reciprocal(0)
 end
 
 # Test cascading handlers
-handling(DivisionByZero => (c)->println("I saw it too")) do
-    handling(DivisionByZero => (c)->println("I saw a division by zero")) do
+handling(DivisionByZero => (c) -> println("I saw it too")) do
+    handling(DivisionByZero => (c) -> println("I saw a division by zero")) do
         reciprocal(0)
     end
 end
 
 # Test escaping from a handler
 to_escape() do exit
-    handling(DivisionByZero => (c)->(println("I saw it too"); exit("Done"))) do
-        handling(DivisionByZero => (c)->println("I saw a division by zero")) do
+    handling(DivisionByZero => (c) -> (println("I saw it too"); exit("Done"))) do
+        handling(DivisionByZero => (c) -> println("I saw a division by zero")) do
             reciprocal(0)
         end
     end
@@ -176,8 +183,8 @@ end
 
 # Test escaping from an inner handler
 to_escape() do exit
-    handling(DivisionByZero => (c)->println("I saw it too")) do
-        handling(DivisionByZero => (c)->(println("I saw a division by zero"); exit("Done"))) do
+    handling(DivisionByZero => (c) -> println("I saw it too")) do
+        handling(DivisionByZero => (c) -> (println("I saw a division by zero"); exit("Done"))) do
             reciprocal(0)
         end
     end
@@ -185,30 +192,30 @@ end
 
 # Test with_restart
 function reciprocal_with_restarts(value)
-    with_restart(:return_zero => ()->0,
-                :return_value => identity,
-                :retry_using => reciprocal) do
-        value == 0 ? error(DivisionByZero()) : 1/value
+    with_restart(:return_zero => () -> 0,
+        :return_value => identity,
+        :retry_using => reciprocal) do
+        value == 0 ? error(DivisionByZero()) : 1 / value
     end
 end
 
 # Test invoking restarts
-handling(DivisionByZero => (c)->invoke_restart(:return_zero)) do
+handling(DivisionByZero => (c) -> invoke_restart(:return_zero)) do
     reciprocal_with_restarts(0)
 end
 
 # Test passing arguments to restarts
-handling(DivisionByZero => (c)->invoke_restart(:return_value, 123)) do
+handling(DivisionByZero => (c) -> invoke_restart(:return_value, 123)) do
     reciprocal_with_restarts(0)
 end
 
-handling(DivisionByZero => (c)->invoke_restart(:retry_using, 10)) do
+handling(DivisionByZero => (c) -> invoke_restart(:retry_using, 10)) do
     reciprocal_with_restarts(0)
 end
 
 # Test available_restart
-handling(DivisionByZero => 
-    (c)-> for restart in (:return_one, :return_zero, :die_horribly)
+handling(DivisionByZero =>
+    (c) -> for restart in (:return_one, :return_zero, :die_horribly)
         if available_restart(restart)
             println("Found restart: ", restart)
             invoke_restart(restart)
@@ -221,16 +228,16 @@ end
 
 # Test nested restarts
 function infinity()
-    with_restart(:just_do_it => ()->1/0) do
+    with_restart(:just_do_it => () -> 1 / 0) do
         reciprocal_with_restarts(0)
     end
 end
 
-handling(DivisionByZero => (c)->invoke_restart(:return_zero)) do
+handling(DivisionByZero => (c) -> invoke_restart(:return_zero)) do
     infinity()
 end
 
-handling(DivisionByZero => (c)->invoke_restart(:just_do_it)) do
+handling(DivisionByZero => (c) -> invoke_restart(:just_do_it)) do
     infinity()
 end
 
@@ -255,14 +262,14 @@ println() # Add newline after previous output
 
 # Signal with escape handler
 to_escape() do exit
-    handling(LineEndLimit => (c)->exit()) do
+    handling(LineEndLimit => (c) -> exit()) do
         print_line("Hi, everybody! How are you feeling today?")
     end
 end
 println() # Add newline after previous output
 
 # Signal with newline handler
-handling(LineEndLimit => (c)->println()) do
+handling(LineEndLimit => (c) -> println()) do
     print_line("Hi, everybody! How are you feeling today?")
 end
 println() # Add newline after previous output
@@ -282,7 +289,7 @@ end
 
 # Error with escape handler
 to_escape() do exit
-    handling(LineEndLimit => (c)->exit()) do
+    handling(LineEndLimit => (c) -> exit()) do
         print_line_error("Hi, everybody! How are you feeling today?")
     end
 end
@@ -290,7 +297,7 @@ println() # Add newline after previous output
 
 # Error with newline handler (this will still abort because error demands handling)
 try
-    handling(LineEndLimit => (c)->println()) do
+    handling(LineEndLimit => (c) -> println()) do
         print_line_error("Hi, everybody! How are you feeling today?")
     end
 catch e
