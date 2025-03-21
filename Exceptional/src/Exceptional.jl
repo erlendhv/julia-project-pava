@@ -1,6 +1,58 @@
 # Global registry to track available restarts at different execution points
 const restart_registry = Dict{Symbol,Vector{Tuple{Symbol,Function}}}()
 
+
+# Signals an exceptional situation that must be handled.
+# If no handler takes action, the program aborts with an error.
+function Base.error(exception)
+    throw(exception)
+end
+
+# Custom exception types for internal use
+
+# Represents a non-local transfer of control initiated by a call to an escape function.
+struct EscapeException <: Exception
+    context_id::Symbol
+    value::Any
+end
+
+# Represents a request to invoke a restart.
+struct RestartInvocation <: Exception
+    context_id::Symbol
+    restart_name::Symbol
+    args::Tuple
+end
+
+# Initialize the restart registry
+function __init__()
+    empty!(restart_registry)
+end
+
+# Define a simple DivisionByZero exception
+struct DivisionByZero <: Exception end
+
+
+
+# Executes the function `func` in a context where the provided exception handlers
+# are active. Handlers are provided as pairs of `ExceptionType => handler_function`.
+function handling(func, handlers...)
+    try
+        return func()
+    catch e
+        # Find the first handler that matches the exception type
+        for (exception_type, handler) in handlers
+            if e isa exception_type
+                # Call the handler with the exception
+                handler(e)  # Call the handler
+                rethrow(e)  # Re-throw to allow outer handlers to catch it
+            end
+        end
+        # If no handler matches, re-throw the exception
+        rethrow(e)
+    end
+end
+
+
 #Establishes a named exit point that can be used for non-local transfers of control.
 #The provided function `func` will be called with an escape function as its argument.
 function to_escape(func)
@@ -22,26 +74,6 @@ function to_escape(func)
             # Otherwise, re-throw the exception
             rethrow(e)
         end
-    end
-end
-
-
-# Executes the function `func` in a context where the provided exception handlers
-# are active. Handlers are provided as pairs of `ExceptionType => handler_function`.
-function handling(func, handlers...)
-    try
-        return func()
-    catch e
-        # Find the first handler that matches the exception type
-        for (exception_type, handler) in handlers
-            if e isa exception_type
-                # Call the handler with the exception
-                handler(e)  # Call the handler
-                rethrow(e)  # Re-throw to allow outer handlers to catch it
-            end
-        end
-        # If no handler matches, re-throw the exception
-        rethrow(e)
     end
 end
 
@@ -76,17 +108,6 @@ function with_restart(func, restarts...)
     end
 end
 
-# Checks if a restart with the given name is available in the current execution context.
-function available_restart(name)
-    for (context_id, restarts) in restart_registry
-        for (restart_name, _) in restarts
-            if restart_name == name
-                return true
-            end
-        end
-    end
-    return false
-end
 
 # Invokes a restart with the given name and arguments.
 function invoke_restart(name, args...)
@@ -101,6 +122,19 @@ function invoke_restart(name, args...)
     throw(ArgumentError("No restart named $name is available"))
 end
 
+# Checks if a restart with the given name is available in the current execution context.
+function available_restart(name)
+    for (context_id, restarts) in restart_registry
+        for (restart_name, _) in restarts
+            if restart_name == name
+                return true
+            end
+        end
+    end
+    return false
+end
+
+
 # Signals an exceptional situation, allowing handlers to act on it.
 # The signal can be ignored if no handler takes action.
 function signal(exception)
@@ -112,34 +146,6 @@ function signal(exception)
     end
 end
 
-# Signals an exceptional situation that must be handled.
-# If no handler takes action, the program aborts with an error.
-function Base.error(exception)
-    throw(exception)
-end
-
-# Custom exception types for internal use
-
-# Represents a non-local transfer of control initiated by a call to an escape function.
-struct EscapeException <: Exception
-    context_id::Symbol
-    value::Any
-end
-
-# Represents a request to invoke a restart.
-struct RestartInvocation <: Exception
-    context_id::Symbol
-    restart_name::Symbol
-    args::Tuple
-end
-
-# Initialize the restart registry
-function __init__()
-    empty!(restart_registry)
-end
-
-# Define a simple DivisionByZero exception
-struct DivisionByZero <: Exception end
 
 # Test the reciprocal function
 function reciprocal(x)
