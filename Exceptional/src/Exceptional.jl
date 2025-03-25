@@ -1,28 +1,37 @@
 # GLOBAL VARIABLES AND EXCEPTIONS
 
-# Global flag to track if we're inside a handling block
+# Track state and maintain registries for handlers and restarts
 global in_handler_context = false
-# Global registry to track available restarts
 const restart_registry = Dict{Symbol, Vector{Tuple{Symbol, Function}}}()
-# Define a simple DivisionByZero exception
+# Global registry for signal handlers
+global signal_handlers = Dict{Type, Vector{Function}}()
+
+# Custom Exception Types
 struct DivisionByZero <: Exception end
-# Represents a non-local transfer of control initiated by a call to an escape function.
+
+struct LineEndLimit <: Exception
+end
+
+# Represents a non-local control transfer initiated by an escape function.
+# Tracks a unique context identifier and an optional return value.
 struct EscapeException <: Exception
     context_id::Symbol
     value::Any
 end
-# Represents a request to invoke a restart.
+
+# Represents a request to invoke a specific restart strategy.
+# Includes context identifier, restart name, and arguments.
 struct RestartInvocation <: Exception
     context_id::Symbol
     restart_name::Symbol
     args::Tuple
 end
-struct LineEndLimit <: Exception
-end
-# Global registry for signal handlers
-global signal_handlers = Dict{Type, Vector{Function}}()
 
-# Register a signal handler
+# ----------------
+# Helper functions
+# ----------------
+
+# Register a new signal handler for a specific exception type
 function register_signal_handler(signal_type, handler)
     if !haskey(signal_handlers, signal_type)
         signal_handlers[signal_type] = Function[]
@@ -31,7 +40,7 @@ function register_signal_handler(signal_type, handler)
     return length(signal_handlers[signal_type])
 end
 
-# Remove a signal handler
+# Remove a specific signal handler from the registry
 function remove_signal_handler(signal_type, handler_id)
     if haskey(signal_handlers, signal_type) && handler_id <= length(signal_handlers[signal_type])
         deleteat!(signal_handlers[signal_type], handler_id)
@@ -41,12 +50,10 @@ end
 # --------
 # HANDLING
 # --------
-# Modified handling to register signal handlers
+# Flexible handling mechanism for exceptions and signals with nested support
 function handling(func, handlers...)
-    # Register handlers for signals
     handler_ids = []
     for (exception_type, handler) in handlers
-        # For signals, register a handler that returns true if the handler returns non-nothing
         wrapped_handler = (e) -> begin
             result = handler(e)
             return result !== nothing
@@ -55,10 +62,8 @@ function handling(func, handlers...)
         push!(handler_ids, (exception_type, id))
     end
     try
-        # Execute the function with the registered signal handlers
         return func()
     catch e
-        # Traditional exception handling
         for (exception_type, handler) in handlers
             if e isa exception_type
                 result = handler(e)
@@ -71,7 +76,6 @@ function handling(func, handlers...)
         end
         rethrow(e)
     finally
-        # Clean up signal handlers
         for (exception_type, id) in handler_ids
             remove_signal_handler(exception_type, id)
         end
@@ -81,8 +85,7 @@ end
 # -----
 # ERROR
 # -----
-# Signals an exceptional situation that must be handled.
-# If no handler takes action, the program aborts with an error.
+# Throw an exception that must be handled
 function Base.error(exception)
     throw(exception)
 end
@@ -131,23 +134,16 @@ end
 # ---------
 # TO_ESCAPE
 # ---------
-#Establishes a named exit point that can be used for non-local transfers of control.
-#The provided function `func` will be called with an escape function as its argument.
+# Create a non-local exit point with controlled value return
 function to_escape(func)
-    # Create a unique context identifier for this escape point
     context_id = gensym("escape_context")
-    # Define the escape function
     escape_func = (value=nothing) -> throw(EscapeException(context_id, value))
     try
-        # Call the function with the escape function as argument
         return func(escape_func)
     catch e
-        # Check if this is an escape exception for our context
         if e isa EscapeException && e.context_id == context_id
-            # If so, return the value that was passed to the escape function
             return e.value
         else
-            # Otherwise, re-throw the exception
             rethrow(e)
         end
     end
@@ -217,37 +213,25 @@ end
 # ------------
 # WITH_RESTART
 # ------------
+# Create a context with available restart strategies
 function with_restart(func, restarts...)
-    # Create a unique identifier for this restart context
     context_id = gensym("restart_context")
-    # Register the restarts
     restart_registry[context_id] = [(name, restart_func) for (name, restart_func) in restarts]
-    # Print the restarts for debugging
-    println("Registered restarts for context ", context_id, ": ", [name for (name, _) in restart_registry[context_id]])
     try
-        # Execute the function in the context of the restarts
         return func()
     catch e
-        # Just rethrow the exception - don't clean up
         rethrow(e)
     end
-    # No cleanup! Leave the restarts in the registry
-    # This means they'll be available to handlers even after exceptions propagate
 end
 
 # --------------
 # INVOKE_RESTART
 # --------------
+# Invoke a specific restart strategy from available restarts
 function invoke_restart(name, args...)
-    println("Looking for restart: ", name)
-    println("Available contexts: ", keys(restart_registry))
-    # Find the restart function
     for (context_id, restarts) in restart_registry
-        println("Context ", context_id, " has restarts: ", [r[1] for r in restarts])
         for (restart_name, restart_func) in restarts
             if restart_name == name
-                println("Found restart ", name, " in context ", context_id)
-                # Call the restart function with the provided arguments
                 return restart_func(args...)
             end
         end
@@ -348,9 +332,9 @@ end
 
 
 
-# ------------------
+# ------------------------------------------------------
 # Test cases for print_line with ERROR instead of SIGNAL
-# ------------------
+# ------------------------------------------------------
 
 print_line(str, line_end=20) =
     let col = 0
@@ -385,22 +369,16 @@ end
 # -------
 # SIGNAL
 # -------
-# Signals an exceptional situation, allowing handlers to act on it.
-# The signal can be ignored if no handler takes action.
-# Signal function that calls handlers directly
+# Signal an exceptional situation with flexible handler processing
 function signal(exception)
-    # Check if we have handlers for this exception type
     if haskey(signal_handlers, typeof(exception))
-        # Call each handler until one returns true (fully handled)
         for handler in signal_handlers[typeof(exception)]
             result = handler(exception)
             if result === true
-                # Handler fully handled the signal
                 return true
             end
         end
     end
-    # No handlers or none fully handled it
     return false
 end
 
@@ -436,7 +414,6 @@ end
 # Hi, everybody! How a
 # re you feeling today
 # ?
-
 handling(LineEndLimit => (c)->println()) do
     print_line("Hi, everybody! How are you feeling today?")
 end
