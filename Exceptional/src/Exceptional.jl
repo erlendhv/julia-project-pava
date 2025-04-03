@@ -3,7 +3,7 @@
 # Track state and maintain registries for handlers and restarts
 const restart_registry = Dict{Symbol,Vector{Tuple{Symbol,Function}}}()
 # Global registry for signal handlers
-global signal_handlers = Dict{Type,Vector{Function}}()
+const signal_handlers = Dict{Type,Vector{Function}}()
 
 # Custom Exception Types
 struct DivisionByZero <: Exception end
