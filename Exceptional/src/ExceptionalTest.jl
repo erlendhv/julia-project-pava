@@ -138,8 +138,8 @@ end
 # Test cases for AVAILABLE_RESTARTS
 # ---------------------------------
 
-# TODO: added an explicit return compared to the test from the project description
-#       to match out code. Needs to either be this way or to rewrite previous code
+# Expected:
+# 0
 handling(DivisionByZero =>
     (c) -> for restart in (:return_one, :return_zero, :die_horribly)
         if available_restart(restart)
