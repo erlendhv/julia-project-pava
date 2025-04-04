@@ -6,14 +6,12 @@ const restart_registry = Dict{Symbol,Vector{Tuple{Symbol,Function}}}()
 const signal_handlers = Dict{Type,Vector{Function}}()
 
 # Represents a non-local control transfer initiated by an escape function
-# Tracks a unique context identifier and an optional return value
 struct EscapeException <: Exception
     context_id::Symbol
     value::Any
 end
 
 # Represents a request to invoke a specific restart strategy
-# Includes context identifier, restart name, and arguments
 struct RestartInvocation <: Exception
     context_id::Symbol
     restart_name::Symbol
@@ -39,6 +37,9 @@ function remove_signal_handler(signal_type, handler_id)
         deleteat!(signal_handlers[signal_type], handler_id)
     end
 end
+
+
+# MAIN FUNCTIONS
 
 # --------
 # HANDLING
@@ -133,7 +134,7 @@ end
 # -----------------
 # AVAILABLE_RESTART
 # -----------------
-# Checks if a restart with the given name is available in the current execution context
+# Checks if a restart with the given name is available in the restart registry
 function available_restart(name)
     for (context_id, restarts) in restart_registry
         for (restart_name, _) in restarts
