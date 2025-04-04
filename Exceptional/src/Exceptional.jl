@@ -5,10 +5,6 @@ const restart_registry = Dict{Symbol,Vector{Tuple{Symbol,Function}}}()
 # Global registry for signal handlers
 const signal_handlers = Dict{Type,Vector{Function}}()
 
-# Custom Exception Types
-struct DivisionByZero <: Exception end
-
-
 # Represents a non-local control transfer initiated by an escape function.
 # Tracks a unique context identifier and an optional return value.
 struct EscapeException <: Exception
@@ -87,7 +83,6 @@ function Base.error(exception)
     throw(exception)
 end
 
-
 # ---------
 # TO_ESCAPE
 # ---------
@@ -105,7 +100,6 @@ function to_escape(func)
         end
     end
 end
-
 
 # ------------
 # WITH_RESTART
@@ -136,7 +130,6 @@ function invoke_restart(name, args...)
     throw(ArgumentError("No restart named $name is available"))
 end
 
-
 # -----------------
 # AVAILABLE_RESTART
 # -----------------
@@ -151,7 +144,6 @@ function available_restart(name)
     end
     return false
 end
-
 
 # -------
 # SIGNAL
@@ -168,4 +160,3 @@ function signal(exception)
     end
     return false
 end
-

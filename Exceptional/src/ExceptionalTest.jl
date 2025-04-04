@@ -1,6 +1,7 @@
-struct LineEndLimit <: Exception
-end
+# Custom Exception Types
+struct DivisionByZero <: Exception end
 
+struct LineEndLimit <: Exception end
 
 # -------------
 # Test of ERROR
@@ -39,8 +40,6 @@ handling(DivisionByZero => (c) -> println("I saw it too")) do
         reciprocal(0)
     end
 end
-
-
 
 # ------------------
 # Tests of TO_ESCAPE
@@ -133,7 +132,6 @@ handling(DivisionByZero => (c) -> invoke_restart(:retry_using, 10)) do
     reciprocal(0)
 end
 
-
 # ---------------------------------
 # Test cases for AVAILABLE_RESTARTS
 # ---------------------------------
@@ -177,7 +175,6 @@ end
 handling(DivisionByZero => (c) -> invoke_restart(:just_do_it)) do
     infinity()
 end
-
 
 # ------------------------------------------------------
 # Test cases for print_line with ERROR instead of SIGNAL
