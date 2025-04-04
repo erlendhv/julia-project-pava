@@ -5,15 +5,15 @@ const restart_registry = Dict{Symbol,Vector{Tuple{Symbol,Function}}}()
 # Global registry for signal handlers
 const signal_handlers = Dict{Type,Vector{Function}}()
 
-# Represents a non-local control transfer initiated by an escape function.
-# Tracks a unique context identifier and an optional return value.
+# Represents a non-local control transfer initiated by an escape function
+# Tracks a unique context identifier and an optional return value
 struct EscapeException <: Exception
     context_id::Symbol
     value::Any
 end
 
-# Represents a request to invoke a specific restart strategy.
-# Includes context identifier, restart name, and arguments.
+# Represents a request to invoke a specific restart strategy
+# Includes context identifier, restart name, and arguments
 struct RestartInvocation <: Exception
     context_id::Symbol
     restart_name::Symbol
@@ -86,7 +86,7 @@ end
 # ---------
 # TO_ESCAPE
 # ---------
-# Create a non-local exit point with controlled value return
+# Create a non-local exit point
 function to_escape(func)
     context_id = gensym("escape_context")
     escape_func = (value = nothing) -> throw(EscapeException(context_id, value))
@@ -104,7 +104,7 @@ end
 # ------------
 # WITH_RESTART
 # ------------
-# Create a context with available restart strategies
+# Create a context with available restart strategies and add to global registry
 function with_restart(func, restarts...)
     context_id = gensym("restart_context")
     restart_registry[context_id] = [(name, restart_func) for (name, restart_func) in restarts]
@@ -133,7 +133,7 @@ end
 # -----------------
 # AVAILABLE_RESTART
 # -----------------
-# Checks if a restart with the given name is available in the current execution context.
+# Checks if a restart with the given name is available in the current execution context
 function available_restart(name)
     for (context_id, restarts) in restart_registry
         for (restart_name, _) in restarts
@@ -148,7 +148,7 @@ end
 # -------
 # SIGNAL
 # -------
-# Signal an exceptional situation with flexible handler processing
+# Signal an exceptional situation
 function signal(exception)
     if haskey(signal_handlers, typeof(exception))
         for handler in signal_handlers[typeof(exception)]
